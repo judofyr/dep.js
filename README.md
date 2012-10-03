@@ -16,6 +16,207 @@ dep.define('module', [], function() {
 });
 ```
 
+**Table of Contents:**
+
+* [Why?](#why)
+* [Examples](#examples)
+* [API](#api)
+
+<a name='why'></a>
+## Why?
+
+Dependency managers bring several advantages to your JavaScript:
+
+* You can stop worrying about the order of your code.
+* Concatinating becomes a breeze (because the order doesn't matter).
+* Loading scripts async becomes a breeze (because the order doesn't matter).
+
+dep.js the simplest possible dependency manager. It only does one thing:
+Managing the dependencies of your code. You should find it very easy to
+integrate dep.js into an exisiting code base, regardless of how you structure
+your code on the file system or to the browser.
+
+See the next section for how you can accomplish various tasks with dep.js.
+
+<a name='examples'></a>
+## Examples
+
+### Internal dependencies inside a single file
+
+Do you want to modularize a single file? Or maybe you automatically
+concatenate all the sources into one big file when you deploy?
+
+```javascript
+var App = {};
+
+dep.define('Task', [], function() {
+  App.Task = Backbone.Model.extend({...});
+  App.Tasks = new Backbone.Collection;
+});
+
+dep.define('TaskView', [], function() {
+  App.TaskView = Backbone.View.extend({...});
+});
+
+dep.define('AppView', ['TaskView', 'Task'], function() {
+  App.AppView = Backbone.View.extend({...});
+  new App.AppView
+});
+```
+
+Notice that regardless of the order of the modules, the AppView-model will
+only be loaded until both TaskView and Task are present.
+
+### Handling onload
+
+Often you have modules that depends on the page being fully loaded. You can
+create a load-module which doesn't actually define anything, but isn't defined
+until after the DOM is ready:
+
+```javascript
+$(function() {
+  dep.define('load');
+});
+
+dep.define('AppView', ['load'], function() {
+  // Do stuff with the DOM
+});
+```
+
+### Loading modules asynchronously
+
+`dep.load` is invoked every time a module is defined with a dependency that
+isn't already loaded. We can override this to automatically load other modules
+asynchronously:
+
+```javascript
+var loading = {}
+
+dep.load = function(name) {
+  // We're already loading the file.
+  if (loading[name]) return;
+  loading[name] = true;
+
+  // Load the file
+  var el = document.createElement('script');
+  el.src = name;
+  el.async = true;
+  document.body.appendChild(el);
+};
+
+// Kick everything off:
+dep.define('setup', ['app.js']);
+```
+
+In app.js:
+
+```javascript
+dep.define('app.js', ['mod.js'], function() {
+  mod.use();
+});
+```
+
+In mod.js:
+
+```javascript
+dep.define('mod.js', [], function() {
+  window.mod = {};
+});
+```
+
+### Loading other scripts asynchronously
+
+Things are going to be a little more tricky (but only a little) if you want to
+asynchronously load scripts that don't define dep.js modules. First of all we
+need a cross-browser way to load a script with a callback:
+
+```javascript
+// https://gist.github.com/3633336
+function loadScript(path, fn) {
+  var el = document.createElement('script')
+    , loaded = 0
+    , onreadystatechange = 'onreadystatechange'
+    , readyState = 'readyState';
+
+  el.onload = el.onerror = el[onreadystatechange] = function () {
+    if (loaded || (el[readyState] && !(/^c|loade/.test(el[readyState])))) return;
+    el.onload = el.onerror = el[onreadystatechange] = null;
+    loaded = 1;
+    fn();
+  };
+
+  el.async = 1;
+  el.src = path;
+  document.getElementsByTagName('head')[0].appendChild(el);
+}
+```
+
+Then we can hook up `dep.load` as we did in the last section:
+
+```javascript
+var loading = {};
+var scripts = {
+  jquery: "//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"
+};
+
+dep.load = function(name) {
+  var url = scripts[name];
+  if (!url) return
+
+  // We're already loading the file.
+  if (loading[name]) return;
+  loading[name] = true;
+
+  loadScript(url, function() {
+    dep.define(name);
+  });
+};
+```
+
+### Synchronize inline script-tags
+
+A common pattern in JavaScript heavy web sites is to bootstrap data using an
+inline script-tag. This avoids firing an extra AJAX call to the server for the
+initial data.
+
+```html
+<script>
+  var Accounts = new Backbone.Collection;
+  Accounts.reset(<%= @accounts.to_json %>);
+  var Projects = new Backbone.Collection;
+  Projects.reset(<%= @projects.to_json(:collaborators => true) %>);
+</script>
+```
+
+This doesn't work so well when you're loading your JavaScript asynchronously.
+You don't know what will execute first: the inline script-tag or your
+application code. By placing the inline script-tag in a module, you can let
+dep.js handle this dependency issue for you:
+
+```html
+<script>
+  dep.define('initial-data', ['account', 'project'], function() {
+    var Accounts = new Backbone.Collection;
+    Accounts.reset(<%= @accounts.to_json %>);
+    var Projects = new Backbone.Collection;
+    Projects.reset(<%= @projects.to_json(:collaborators => true) %>);
+  });
+</script>
+```
+
+### Multiple dependency chains
+
+`dep` happens to also be a factory function which can be used to create
+separate depdency chains:
+
+```javascript
+var App = {};
+dep(App);
+
+App.define('...', [], function() { ... });
+```
+
+<a name='api'></a>
 ## API
 
 ### dep.define
@@ -23,11 +224,13 @@ dep.define('module', [], function() {
 ```javascript
 dep.define(name, dependencies, factory);
 dep.define(name, dependencies);
+dep.define(name);
 ```
 
-Defines a module called `name` with an array of `dependencies` and
-(optionally) a `factory` function that will be invoked when all the dependencies
-have been declared. The return value of the factory function does not matter. 
+Defines a module called `name` with an (optional) array of
+`dependencies` and (optionally) a `factory` function that will be
+invoked when all the dependencies have been declared. The return value
+of the factory function does not matter.
 
 ### dep.load
 
@@ -39,36 +242,6 @@ dep.load(name);
 invoked every time a module is defined with a dependency that isn't already
 loaded. You can use this to automatically load dependencies when they're
 needed.
-
-Here's a way to use this functionality to implement file-focused modules:
-
-```javascript
-var loading = {}
-
-dep.load = function(name) { // We're already loading the file.
-  if (loading[name]) return;
-  loading[name] = true;
-
-  // Load the file
-  var el = document.createElement('script');
-  el.src = name;
-  el.async = true;
-  document.body.appendChild(el);
-};
-
-// Kick everything off
-dep.define('setup', ['app.js']);
-
-
-// In app.js
-dep.define('app.js', ['mod.js'], function() {
-  mod.use();
-});
-
-// In mod.js
-dep.define('mod.js', [], function() {
-});
-```
 
 ### dep()
 
