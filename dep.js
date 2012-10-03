@@ -19,13 +19,18 @@
   // This is called after a module has been loaded/invoked.
   function resolve(name) {
     var children = graph[name], i, child, cb;
+
+    // If there's nothing that dependens on this module, there's nothing for
+    // us to do either
     if (!children) return;
+
+    // Reset graph
     graph[name] = 0;
 
     for (i = 0; i < children.length; i++) {
       child = children[i];
       if (--count[child] == 0 && !loaded[child]) {
-        // This was the last dependency for this child.
+        // This was the final dependency for this child.
         loaded[child] = 1;
         cb = factories[child];
         if (cb) cb();
@@ -42,7 +47,7 @@
       if (!loaded[deps[i]]) currentDeps.push(deps[i]);
     }
     
-    // No depdencies == load straight away.
+    // No dependencies == load straight away
     if (!currentDeps.length) {
       loaded[name] = 1;
       if (cb) cb();
