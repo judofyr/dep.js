@@ -257,12 +257,14 @@ of the factory function does not matter.
 ### dep.use
 
 ```javascript
-dep.use(name);
-dep.use(name, callback);
+dep.use(names);
+dep.use(names, callback);
 ```
 
-Attemps to load the module called `name`. The (optional) callback will
-be invoked when the module and all of its dependencies are present.
+`names` must either be a string or an array of strings.
+
+Attemps to load the modules in `names`. The (optional) callback will be
+invoked when the modules and all of their dependencies are present.
 
 ### dep.load
 
