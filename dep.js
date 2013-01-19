@@ -10,67 +10,96 @@
   //   count["app"] == 2
   var count = {};
 
+  // List of dependencies per module
+  //    dependencies["app"] = ["a", "b"]
+  var dependencies = {};
+
   // Already loaded modules.
   var loaded = {};
 
   // Factories.
-  var factories = {};
+  var factory = {};
 
-  // This is called after a module has been loaded/invoked.
-  function resolve(name) {
-    var children = graph[name], i, child, cb;
+  // List of Functions that want to use a module.
+  // This can also be an empty array if there's a dependency.
+  // If "app" depends on "a" and "b", and someone uses "app":
+  //    uses["app"] = [function() { app }]
+  //    uses["a"]   = []
+  //    uses["b"]   = []
+  var uses = {};
 
-    // If there's nothing that dependens on this module, there's nothing for
-    // us to do either
-    if (!children) return;
+  // Attempt to the load a module.
+  function load(name, cb) {
+    var deps, dep
+      // Setup the the `uses`-array
+      , use = (uses[name] || (uses[name] = []))
 
-    // Reset graph
-    graph[name] = 0;
+    if (cb) use.push(cb);
 
-    for (i = 0; i < children.length; i++) {
-      child = children[i];
-      if (--count[child] == 0 && !loaded[child]) {
-        // This was the final dependency for this child.
-        loaded[child] = 1;
-        cb = factories[child];
-        if (cb) cb();
-        resolve(child);
+    if (deps = dependencies[name]) {
+      // This module has already been defined somewhere elase.
+
+      dependencies[name] = 0;
+
+      // If there's no dependencies, we can set it up right away.
+      if (!deps.length) setup(name);
+
+      // Otherwise, recursively try to load its dependencies.
+      while (dep = deps.shift()) load(dep);
+
+    } else if (ctx.load) {
+      ctx.load(name);
+    }
+  }
+
+  // This is called whenever we want to setup a module.
+  function setup(name) {
+    var children = graph[name]
+      , use = uses[name]
+      , x
+
+    if (!loaded[name]) {
+      loaded[name] = 1;
+      // Invoke factory (if any)
+      if (x = factory[name]) x();
+      // Invoke any users
+      while (x = use.shift()) x()
+
+      // Iterate over the graph and figure out if we can now invoke any
+      // other modules.
+      while (x = children && children.shift()) {
+        if (--count[x] == 0) {
+          // This was the final dependency for this child.
+          setup(x);
+        }
       }
+    }
+  }
+
+  ctx.use = function(dep, cb) {
+    if (loaded[dep]) {
+      cb();
+    } else {
+      load(dep, cb);
     }
   }
 
   ctx.define = function(name, deps, cb) {
     var i, dep, currentDeps = [];
 
-    // Remove dependencies that has already been loaded
-    for (i = 0; deps && i < deps.length; i++) {
-      if (!loaded[deps[i]]) currentDeps.push(deps[i]);
-    }
-    
-    // No dependencies == load straight away
-    if (!currentDeps.length) {
-      loaded[name] = 1;
-      if (cb) cb();
-      resolve(name);
-      return;
-    }
-
-    factories[name] = cb;
-    count[name] = currentDeps.length;
-
-    // Build graph
-    for (i = 0; i < currentDeps.length; i++) {
-      dep = currentDeps[i];
-      (graph[dep] || (graph[dep] = [])).push(name);
-    }
-
-    // Call .load
-    if (ctx.load) {
-      for (i = 0; i < currentDeps.length; i++) {
-        ctx.load(currentDeps[i]);
+    while (dep = deps && deps.shift()) {
+      // We don't care about dependencies that has already been loaded
+      if (!loaded[dep]) {
+        currentDeps.push(dep);
+        (graph[dep] || (graph[dep] = [])).push(name);
       }
     }
 
+    dependencies[name] = currentDeps;
+    count[name] = currentDeps.length;
+    factory[name] = cb;
+
+    if (uses[name]) load(name);
   };
 
   return ctx;

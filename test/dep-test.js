@@ -23,15 +23,30 @@ buster.testCase("dep", {
 
   "no dependencies": function() {
     this.dep.define('hello', [], this.incr);
-    this.is(1);
+    this.is(0);
+    this.dep.use('hello', this.incr);
+    this.is(2);
     this.dep.define('world', ['hello'], this.incr);
     this.is(2);
+    this.dep.use('world', this.incr);
+    this.is(4);
   },
 
   "reverse": function() {
-    this.dep.define('world', ['hello'], this.incr);
+    this.dep.define('world', ['hello']);
+    this.dep.use('world', this.incr);
     this.is(0);
-    this.dep.define('hello', [], this.incr);
+    this.dep.define('hello', []);
+    this.dep.use('hello', this.incr);
+    this.is(2);
+  },
+
+  "use before define": function() {
+    this.dep.use('hello', this.incr);
+    this.is(0);
+    this.dep.define('hello', ['world'], this.incr);
+    this.is(0);
+    this.dep.define('world');
     this.is(2);
   },
 
@@ -39,6 +54,8 @@ buster.testCase("dep", {
     this.dep.define('a', ['b'], this.incr);
     this.dep.define('b', ['c'], this.incr);
     this.dep.define('c', ['a'], this.incr);
+    this.is(0);
+    this.dep.use('a');
     this.is(0);
   },
 
@@ -49,6 +66,8 @@ buster.testCase("dep", {
     };
 
     this.dep.define('world', ['hello'], this.incr);
+    assert.equals(deps, []);
+    this.dep.use('world');
     assert.equals(deps, ['hello']);
   },
 
@@ -58,7 +77,9 @@ buster.testCase("dep", {
     }
 
     this.dep.define('world', ['hello'], this.incr);
-    this.is(1);
+    this.is(0);
+    this.dep.use('world', this.incr);
+    this.is(2);
   },
 
   "load + define other": function() {
@@ -70,7 +91,8 @@ buster.testCase("dep", {
     };
 
     this.dep.define('a', ['b', 'b2'], this.incr);
-    this.is(1);
+    this.dep.use('a', this.incr);
+    this.is(2);
   }
 });
 

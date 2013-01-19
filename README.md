@@ -6,13 +6,17 @@ into a single file, but it can easily be integrated with script loaders if you
 want to organize modules into their own files.
 
 ```javascript
-// This module is not executed until "module" is present.
 dep.define('app', ['module'], function() {
   window.app = {mod: window.module};
 });
 
 dep.define('module', [], function() {
   window.module = {a: 1};
+});
+
+// This will invoke the the functions above in the correct order:
+dep.use('app', function() {
+  alert(window.app);
 });
 ```
 
@@ -62,6 +66,10 @@ dep.define('AppView', ['TaskView', 'Task'], function() {
   App.AppView = Backbone.View.extend({...});
   new App.AppView
 });
+
+dep.use('AppView', function() {
+  new App.AppView(…);
+});
 ```
 
 Notice that regardless of the order of the modules, the AppView-model will
@@ -75,12 +83,15 @@ until after the DOM is ready:
 
 ```javascript
 $(function() {
-  dep.define('load');
+  dep.define('dom');
 });
 
-dep.define('AppView', ['load'], function() {
-  // Do stuff with the DOM
+dep.define('setup', ['dom', 'AppView'], function() {
+  App.mainView = new App.AppView({el: $('#app')});
 });
+
+// Kick it off!
+dep.use('setup');
 ```
 
 ### Loading modules asynchronously
@@ -105,7 +116,7 @@ dep.load = function(name) {
 };
 
 // Kick everything off:
-dep.define('setup', ['app.js']);
+dep.use('app.js');
 ```
 
 In app.js:
@@ -171,6 +182,10 @@ dep.load = function(name) {
     dep.define(name);
   });
 };
+
+dep.define('app', ['jquery'], function() {
+  window.app = $('#app');
+});
 ```
 
 ### Synchronize inline script-tags
@@ -204,6 +219,14 @@ dep.js handle this dependency issue for you:
 </script>
 ```
 
+app.js:
+
+```javascript
+dep.use('initial-data', function() {
+  // Use the data!
+});
+```
+
 ### Multiple dependency chains
 
 `dep` happens to also be a factory function which can be used to create
@@ -228,9 +251,18 @@ dep.define(name);
 ```
 
 Defines a module called `name` with an (optional) array of
-`dependencies` and (optionally) a `factory` function that will be
-invoked when all the dependencies have been declared. The return value
+`dependencies` and (optionally) a `factory` function. The return value
 of the factory function does not matter.
+
+### dep.use
+
+```javascript
+dep.use(name);
+dep.use(name, callback);
+```
+
+Attemps to load the module called `name`. The (optional) callback will
+be invoked when the module and all of its dependencies are present.
 
 ### dep.load
 
@@ -239,9 +271,8 @@ dep.load(name);
 ```
 
 `dep.load` is null by default, but can be overridden by you. It will be
-invoked every time a module is defined with a dependency that isn't already
-loaded. You can use this to automatically load dependencies when they're
-needed.
+invoked when there's a module that blocking another module from being
+loaded.
 
 ### dep()
 
