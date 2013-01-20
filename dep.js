@@ -1,6 +1,6 @@
 (dep = function(ctx){
   // Already loaded modules.
-  var loaded = {};
+  var loaded = ctx.loaded = {};
 
   // Factories.
   var factory = {};
