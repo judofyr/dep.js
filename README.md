@@ -272,16 +272,15 @@ invoked when the modules and all of their dependencies are present.
 dep.load(name);
 ```
 
-`dep.load` is null by default, but can be overridden by you. It will be
-invoked when there's a module that blocking another module from being
-loaded.
+`dep.load` is undefined by default, but can be overridden by you. It will be
+invoked when there's a module that blocking another module from being loaded.
 
 ### dep()
 
 Sometimes it's useful to have multiple, separate dependency chains. By calling
 `dep(obj)` it will set up a separate dependency chain in the `obj`-object. The
-`define`-function above will be defined and `load` will also be invoked when
-needed. No other properties are touched.
+`define` and `use` function above will be defined and `load` will also be
+invoked when needed. No other properties are touched.
 
 ```javascript
 var App = {};
